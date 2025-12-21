@@ -30,6 +30,7 @@ from pprint import pprint
 from typing import Optional
 
 import numpy as np
+import pandas as pd
 import ray
 import torch
 from omegaconf import OmegaConf, open_dict
@@ -63,6 +64,18 @@ from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
 
 WorkerType = type[Worker]
+
+def compute_partial_entropy(concernd_token_mask, entropys, response_masks, loss_agg_mode):
+    if concernd_token_mask.any():
+        concerned_entropys = entropys[concernd_token_mask]  # shape: [2, 6]
+        concerned_masks = response_masks[concernd_token_mask]  # shape: [2, 6]
+        # print("Correct entropys:", concerned_entropys)
+        # print("Correct masks:", concerned_masks)
+        concerned_entropy = agg_loss(loss_mat=concerned_entropys, loss_mask=concerned_masks, loss_agg_mode = loss_agg_mode)
+        concerned_entropy=concerned_entropy.detach().item()
+    else:
+        concerned_entropy = float('nan')
+    return concerned_entropy
 
 
 class Role(Enum):
@@ -576,15 +589,54 @@ class RayPPOTrainer:
             print(f"Warning: Could not set total_training_steps in config. Structure missing? Error: {e}")
 
     def _dump_generations(self, inputs, outputs, gts, scores, reward_extra_infos_dict, dump_path):
-        """Dump rollout/validation samples as JSONL."""
+        """Dump rollout/validation samples as parquet."""
+        import re
+        def prompt_2(x):
+            input_text = x['input']
+            if 'system\nYou are a helpful assistant.\nuser\n' in input_text:
+                # Qwen2.5-base 系列
+                pattern = r'\nuser\n(.*?)\nassistant\n'
+            else:# Llama3.2-3B-Ins
+                pattern = r'user\n\n(.*?)assistant'
+            match = re.search(pattern, input_text, re.DOTALL)
+            if not match:
+                raise Exception("Could not extract problem content between \\nuser\\n and \\nassistant\\n")
+            problem = match.group(1)
+            return [{'content': problem, 'role':'user'}]
+
+        def add_pos_neg_responses_fast(df):
+            """
+            Seperate positive/negative responses
+            """
+            # 一次性提取所有数据
+            outputs = df['output'].tolist()
+            scores = df['score'].tolist()
+            
+            # 使用列表推导式批量处理
+            pos_res = [
+                [out for out, sc in zip(output, score) if sc == 1]
+                for output, score in zip(outputs, scores)
+            ]
+            
+            neg_res = [
+                [out for out, sc in zip(output, score) if sc == 0]
+                for output, score in zip(outputs, scores)
+            ]
+            
+            df['pos_res'] = pos_res
+            df['neg_res'] = neg_res
+            
+            return df
+        
         os.makedirs(dump_path, exist_ok=True)
         filename = os.path.join(dump_path, f"{self.global_steps}.jsonl")
+        df_filename = os.path.join(dump_path, f"{self.global_steps}.parquet") 
 
         n = len(inputs)
         base_data = {
             "input": inputs,
             "output": outputs,
-            "gts": gts,
+            # "gts": gts,
             "score": scores,
             "step": [self.global_steps] * n,
         }
@@ -593,15 +645,57 @@ class RayPPOTrainer:
             if len(v) == n:
                 base_data[k] = v
 
+        data_source=reward_extra_infos_dict.pop('data_source')
+        ability=reward_extra_infos_dict.pop('ability')
+        reward_model=reward_extra_infos_dict.pop('reward_model')
+        extra_info=reward_extra_infos_dict.pop('extra_info')
+
         lines = []
+        unique_prompt_set = dict()
         for i in range(n):
             entry = {k: v[i] for k, v in base_data.items()}
-            lines.append(json.dumps(entry, ensure_ascii=False))
+            unique_prompt=entry['input']
+            # 初始化prompt 对应的信息
+            if unique_prompt not in unique_prompt_set:
+                unique_prompt_set[unique_prompt]={}
+                data_dict = unique_prompt_set[unique_prompt]  
+                data_dict['data_source'] = entry['data_source']  
+                data_dict['ability'] = entry['ability']  
+                data_dict['input'] = entry["input"]
+                data_dict['prompt'] = prompt_2(entry)
+                data_dict['answer'] = entry['reward_model']['ground_truth']
+                data_dict['reward_model'] = entry["reward_model"]
+                data_dict['extra_info'] = entry["extra_info"]
+                data_dict['output'] = [entry["output"]]
+                data_dict['score'] = [entry["score"]]
+                try:
+                    data_dict['reward'] = [entry["reward"]]
+                except:
+                    data_dict['reward'] = [entry["score"]]
+                data_dict['step'] = [entry["step"]]
+                data_dict['win_rate'] = sum(data_dict['reward']) / len(data_dict['reward'])
+        
+            else:
+                # 找到 unique_prompt 对应的group
+                data_dict = unique_prompt_set[unique_prompt]    
+                data_dict['output'].append(entry["output"])
+                data_dict['score'].append(entry["score"])
+                try:
+                    data_dict['reward'].append(entry["reward"])
+                except:
+                    data_dict['reward'].append(entry["score"])
+                data_dict['step'].append(entry["step"])
+                data_dict['win_rate'] = sum(data_dict['reward']) / len(data_dict['reward'])            
+            # lines.append(json.dumps(entry, ensure_ascii=False))
+        
+        lines_combined_df = pd.DataFrame(list(unique_prompt_set.values()))
+        
+        lines_combined_df=add_pos_neg_responses_fast(lines_combined_df)
+        filename_combined = filename.split('.')[0]+'_combine.parquet'
+        # lines_combined_df.to_parquet(filename_combined)
+        lines_combined_df.to_parquet(df_filename)
+        print(f"Dumped generations to {df_filename}")
 
-        with open(filename, "w") as f:
-            f.write("\n".join(lines) + "\n")
-
-        print(f"Dumped generations to {filename}")
 
     def _maybe_log_val_generations(self, inputs, outputs, scores):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
@@ -723,6 +817,26 @@ class RayPPOTrainer:
             sample_scores.extend(scores)
 
             reward_extra_infos_dict["reward"].extend(scores)
+            
+            try:
+                reward_extra_infos_dict['data_source'].extend(test_batch.non_tensor_batch["data_source"])
+            except:
+                print('no data_source')
+            try:
+                reward_extra_infos_dict['ability'].extend(test_batch.non_tensor_batch["ability"])
+            except:
+                print('no ability')
+            try:
+                reward_extra_infos_dict['reward_model'].extend(test_batch.non_tensor_batch["reward_model"])
+            except:
+                print('no reward_model')
+            
+            try:
+                reward_extra_infos_dict['extra_info'].extend(test_batch.non_tensor_batch["extra_info"])
+            except:
+                print('no extra_info')
+            
+            
             print(f"len reward_extra_infos_dict['reward']: {len(reward_extra_infos_dict['reward'])}")
             if "reward_extra_info" in result:
                 for key, lst in result["reward_extra_info"].items():
@@ -838,13 +952,15 @@ class RayPPOTrainer:
             wg_kwargs["ray_wait_register_center_timeout"] = self.config.trainer.ray_wait_register_center_timeout
         if OmegaConf.select(self.config.global_profiler, "steps") is not None:
             wg_kwargs["profile_steps"] = OmegaConf.select(self.config.global_profiler, "steps")
-            assert (
-                OmegaConf.select(self.config.global_profiler.global_tool_config.nsys, "worker_nsight_options")
-                is not None
-            ), "worker_nsight_options must be set when profile_steps is set"
-            wg_kwargs["worker_nsight_options"] = OmegaConf.to_container(
-                OmegaConf.select(self.config.global_profiler.global_tool_config.nsys, "worker_nsight_options")
-            )
+            # Only require nsight worker options when tool is nsys
+            if OmegaConf.select(self.config.global_profiler, "tool") == "nsys":
+                assert (
+                    OmegaConf.select(self.config.global_profiler.global_tool_config.nsys, "worker_nsight_options")
+                    is not None
+                ), "worker_nsight_options must be set when using nsys with profile_steps"
+                wg_kwargs["worker_nsight_options"] = OmegaConf.to_container(
+                    OmegaConf.select(self.config.global_profiler.global_tool_config.nsys, "worker_nsight_options")
+                )
         wg_kwargs["device_name"] = self.device_name
 
         for resource_pool, class_dict in self.resource_pool_to_cls.items():
@@ -1004,11 +1120,11 @@ class RayPPOTrainer:
         if do_profile:
             self.actor_rollout_wg.start_profile(role="e2e", profile_step=self.global_steps)
             if self.use_reference_policy:
-                self.ref_policy_wg.start_profile()
+                self.ref_policy_wg.start_profile(profile_step=self.global_steps)
             if self.use_critic:
-                self.critic_wg.start_profile()
+                self.critic_wg.start_profile(profile_step=self.global_steps)
             if self.use_rm:
-                self.rm_wg.start_profile()
+                self.rm_wg.start_profile(profile_step=self.global_steps)
 
     def _stop_profiling(self, do_profile: bool) -> None:
         """Stop profiling for all worker groups if profiling is enabled."""
@@ -1057,6 +1173,9 @@ class RayPPOTrainer:
         )
 
         self.global_steps = 0
+        pre_entropy = 0.0
+        pre_pos_entropy = 0.0
+        pre_neg_entropy = 0.0
 
         # load checkpoint before doing anything
         self._load_checkpoint()
@@ -1125,6 +1244,7 @@ class RayPPOTrainer:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
                             gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
+                        print('finish rollout .......')
                         timing_raw.update(gen_batch_output.meta_info["timing"])
                         gen_batch_output.meta_info.pop("timing", None)
 
@@ -1151,6 +1271,10 @@ class RayPPOTrainer:
 
                     # repeat to align with repeated responses in rollout
                     batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+                    print('batch len: ', len(batch.batch))
+                    print('gen_batch_output len: ', len(gen_batch_output.batch))
+
+                    
                     batch = batch.union(gen_batch_output)
 
                     if "response_mask" not in batch.batch.keys():
@@ -1179,6 +1303,7 @@ class RayPPOTrainer:
 
                     # recompute old_log_probs
                     with marked_timer("old_log_prob", timing_raw, color="blue"):
+                        print('computing old_log_prob and entropys...')
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
                         entropys = old_log_prob.batch["entropys"]
                         response_masks = batch.batch["response_mask"]
@@ -1235,6 +1360,7 @@ class RayPPOTrainer:
                             "norm_adv_by_std_in_grpo", True
                         )  # GRPO adv normalization factor
 
+                        print('use reward rule for reward score...')   
                         batch = compute_advantage(
                             batch,
                             adv_estimator=self.config.algorithm.adv_estimator,
@@ -1244,6 +1370,83 @@ class RayPPOTrainer:
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                             config=self.config.algorithm,
                         )
+
+                    # calculate solve_none/solve_all/solve_partial
+                    uids = batch.non_tensor_batch['uid']
+                    unique_uids = np.unique(uids)
+                    valid_mask = torch.ones(len(uids), dtype=torch.bool)
+                    solve_none = 0
+                    solve_all = 0
+                    for i in range(0,9):
+                        if f'batch/solve_{str(i)}' not in metrics:
+                            metrics[f'batch/solve_{str(i)}'] = 0
+                        else:
+                            pass
+
+                    # Travel over all prompt index
+                    for uid in unique_uids:
+                        # Get uid_mask, to filter responses correspounding to a specified prompt
+                        uid_mask = uids == uid # 
+                        # Given the prompt with uid, get each trajectory's reward
+                        uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
+                        # print(len(uid_rewards))
+                        # print('uid_rewards: ', uid_rewards)
+                        correct_num = uid_rewards.sum()
+                        metrics[f'batch/solve_{str(int(correct_num))}'] = metrics[f'batch/solve_{str(int(correct_num))}'] + 1
+
+                        # Check if all rewards are 0 or all are 1 for this uid
+                        if (uid_rewards == 0).all(): 
+                            # All trajectory rewards are 0, indicating the prompt is very difficult.
+                            valid_mask[uid_mask] = False 
+                            solve_none += 1
+                        elif (uid_rewards == 1).all(): 
+                            # All trajectory rewards are 1, indicating the prompt is very easy.
+                            valid_mask[uid_mask] = False
+                            solve_all += 1
+                    # Log to metrics
+                    
+                    metrics['batch/solve_none'] = solve_none #  batch/solve_none -> counting the number of all-zero-reward prompts in the train batch
+                    metrics['batch/solve_all'] = solve_all # batch/solve_all -> counting the number of all-one-reward prompts in the train batch
+                    metrics['batch/solve_partial'] = len(unique_uids) - solve_none - solve_all # batch/solve_partial -> counting the partially-solved prompts in the train batch                    
+                    
+                    # seperate the entropy by postive/negative
+                    correct_idx = batch.batch["token_level_rewards"].sum(-1) == 1 
+                    incorrect_idx = batch.batch["token_level_rewards"].sum(-1) == 0
+
+
+                    
+                    pos_instance_pencentage_in_bz = correct_idx.sum() / len(correct_idx)
+                    neg_instance_pencentage_in_bz = incorrect_idx.sum() / len(incorrect_idx)
+
+                    # pos_entropy = compute_partial_entropy(correct_idx ,entropys, response_masks, loss_agg_mode)
+                    # neg_entropy = compute_partial_entropy(incorrect_idx ,entropys, response_masks, loss_agg_mode)
+                    # delta_pos_entropy = pos_entropy - pre_pos_entropy
+                    # delta_neg_entropy = neg_entropy - pre_neg_entropy
+                    # pre_pos_entropy = pos_entropy
+                    # pre_neg_entropy = neg_entropy
+
+
+                    seperate_metrics = {}
+                    # seperate_metrics["actor/pos_entropy"] = pos_entropy
+                    # seperate_metrics["actor/neg_entropy"] = neg_entropy
+                    # seperate_metrics["actor/delta_pos_entropy"] = delta_pos_entropy
+                    # seperate_metrics["actor/delta_neg_entropy"] = delta_neg_entropy
+                    seperate_metrics["actor/pos_instance_pencentage_in_bz"] = pos_instance_pencentage_in_bz
+                    seperate_metrics["actor/neg_instance_pencentage_in_bz"] = neg_instance_pencentage_in_bz
+
+                    valid_token_num = response_masks.sum()
+                    valid_pos_token_percentage_in_bz = response_masks[correct_idx].sum() / valid_token_num
+                    valid_neg_token_percentage_in_bz = response_masks[incorrect_idx].sum() / valid_token_num
+                    seperate_metrics["actor/valid_pos_token_percentage_in_bz"]=valid_pos_token_percentage_in_bz
+                    seperate_metrics["actor/valid_neg_token_percentage_in_bz"]=valid_neg_token_percentage_in_bz
+                    metrics.update(seperate_metrics)
+
+                    
+                    # print('correct_idx length:', len(correct_idx))
+                    # print('correct_idx:', correct_idx)
+                    # print('incorrect_idx length:', len(incorrect_idx))
+                    # print('incorrect_idx:', incorrect_idx)
+
 
                     # update critic
                     if self.use_critic:
@@ -1264,14 +1467,33 @@ class RayPPOTrainer:
                     # Log rollout generations if enabled
                     rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
                     if rollout_data_dir:
+                        try:
+                            reward_extra_infos_dict['data_source'].extend(batch.non_tensor_batch["data_source"])
+                        except:
+                            print('no data_source')
+                        try:
+                            reward_extra_infos_dict['ability'].extend(batch.non_tensor_batch["ability"])
+                        except:
+                            print('no ability')
+                        try:
+                            reward_extra_infos_dict['reward_model'].extend(batch.non_tensor_batch["reward_model"])
+                        except:
+                            print('no reward_model')
+                        
+                        try:
+                            reward_extra_infos_dict['extra_info'].extend(batch.non_tensor_batch["extra_info"])
+                        except:
+                            print('no extra_info')
+
                         with marked_timer("dump_rollout_generations", timing_raw, color="green"):
                             inputs = self.tokenizer.batch_decode(batch.batch["prompts"], skip_special_tokens=True)
                             outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
                             scores = batch.batch["token_level_scores"].sum(-1).cpu().tolist()
-                            sample_gts = [
-                                item.non_tensor_batch.get("reward_model", {}).get("ground_truth", None)
-                                for item in batch
-                            ]
+                            # sample_gts = [
+                            #     item.non_tensor_batch.get("reward_model", {}).get("ground_truth", None)
+                            #     for item in batch
+                            # ]
+                            sample_gts = None
 
                             if "request_id" in batch.non_tensor_batch:
                                 reward_extra_infos_dict.setdefault(
@@ -1360,6 +1582,14 @@ class RayPPOTrainer:
 
                 progress_bar.update(1)
                 self.global_steps += 1
+
+                if (
+                    hasattr(self.config.actor_rollout_ref.actor, "profiler")
+                    and self.config.actor_rollout_ref.actor.profiler.tool == "torch_memory"
+                ):
+                    self.actor_rollout_wg.dump_memory_snapshot(
+                        tag=f"post_update_step{self.global_steps}", sub_dir=f"step{self.global_steps}"
+                    )
 
                 if is_last_step:
                     pprint(f"Final validation metrics: {last_val_metrics}")
