@@ -45,6 +45,88 @@ from verl.utils.profiler import marked_timer
 from verl.utils.rollout_skip import RolloutSkip
 
 
+def filter_batch_on_win_rate(prompt_uid2metric_vals, prompt_uid2metric_std, win_num_range=None):
+    if win_num_range != None:
+        win_num_range = list(map(lambda x: int(x), win_num_range))
+        # print('win_num_range: ', win_num_range)
+        kept_prompt_uids = []
+        for uid, vals in prompt_uid2metric_vals.items():
+            win_num = sum(vals)
+            # print(f'uid {uid}, win_num {win_num}')
+            if win_num in win_num_range:
+                kept_prompt_uids.append(uid)
+    
+    elif win_num_range == None:
+        kept_prompt_uids = [
+                        uid
+                        for uid, std in prompt_uid2metric_std.items()
+                        if std > 0 or len(prompt_uid2metric_vals[uid]) == 1
+                    ]
+    return kept_prompt_uids
+
+
+def collect_prompt_solve_metrics(batch, rollout_num, metrics):
+    # calculate solve_none/solve_all/solve_partial
+    reward_tensor=batch.batch["token_level_scores"] 
+    uids = batch.non_tensor_batch['uid']
+    unique_uids = np.unique(uids)
+    valid_mask = torch.ones(len(uids), dtype=torch.bool)
+    solve_none = 0
+    solve_all = 0
+    for i in range(0,rollout_num+1):
+        if f'batch/solve_{str(i)}' not in metrics:
+            metrics[f'batch/solve_{str(i)}'] = 0
+        else:
+            pass
+    # Travel over all prompt index，
+    for uid in unique_uids:
+        # Get uid_mask, to filter responses correspounding to a specified prompt
+        uid_mask = uids == uid # 
+        # Given the prompt with uid, get each trajectory's reward
+        uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
+        # print(len(uid_rewards))
+        # print('uid_rewards: ', uid_rewards)
+        correct_num = uid_rewards.sum()
+        metrics[f'batch/solve_{str(int(correct_num))}'] = metrics[f'batch/solve_{str(int(correct_num))}'] + 1
+
+        # Check if all rewards are 0 or all are 1 for this uid
+        if (uid_rewards == 0).all(): 
+            # All trajectory rewards are 0, indicating the prompt is very difficult.
+            valid_mask[uid_mask] = False 
+            solve_none += 1
+        elif (uid_rewards == 1).all(): 
+            # All trajectory rewards are 1, indicating the prompt is very easy.
+            valid_mask[uid_mask] = False
+            solve_all += 1
+    # Log to metrics
+    
+    metrics['batch/solve_none'] = solve_none #  batch/solve_none -> counting the number of all-zero-reward prompts in the train batch
+    metrics['batch/solve_all'] = solve_all # batch/solve_all -> counting the number of all-one-reward prompts in the train batch
+    metrics['batch/solve_partial'] = len(unique_uids) - solve_none - solve_all # batch/solve_partial -> counting the partially-solved prompts in the train batch                    
+    return metrics
+
+
+def pos_neg_counting_metrics(batch, response_masks, metrics):
+     # seperate the entropy by postive/negative
+    correct_idx = batch.batch["token_level_rewards"].sum(-1) == 1 
+    incorrect_idx = batch.batch["token_level_rewards"].sum(-1) == 0
+    
+    pos_instance_pencentage_in_bz = correct_idx.sum() / len(correct_idx)
+    neg_instance_pencentage_in_bz = incorrect_idx.sum() / len(incorrect_idx)
+
+    seperate_metrics = {}
+    seperate_metrics["actor/pos_instance_pencentage_in_bz"] = pos_instance_pencentage_in_bz
+    seperate_metrics["actor/neg_instance_pencentage_in_bz"] = neg_instance_pencentage_in_bz
+
+    valid_token_num = response_masks.sum()
+    valid_pos_token_percentage_in_bz = response_masks[correct_idx].sum() / valid_token_num
+    valid_neg_token_percentage_in_bz = response_masks[incorrect_idx].sum() / valid_token_num
+    seperate_metrics["actor/valid_pos_token_percentage_in_bz"]=valid_pos_token_percentage_in_bz
+    seperate_metrics["actor/valid_neg_token_percentage_in_bz"]=valid_neg_token_percentage_in_bz
+    metrics.update(seperate_metrics)
+    return metrics
+
+
 class RayDAPOTrainer(RayPPOTrainer):
     """
     Note that this trainer runs on the driver process on a single CPU/GPU node.
@@ -108,6 +190,7 @@ class RayDAPOTrainer(RayPPOTrainer):
         batch = None
         num_prompt_in_batch = 0
         num_gen_batches = 0
+        rollout_num = self.config.actor_rollout_ref.rollout.n
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
                 metrics = {}
@@ -209,6 +292,8 @@ class RayDAPOTrainer(RayPPOTrainer):
                     else:  # NOTE: When prompts after filtering is less than train batch size,
                         # we skip to the next generation batch
                         metric_name = self.config.algorithm.filter_groups.metric
+                        win_num_range = self.config.algorithm.filter_groups.win_num_range
+                        
                         if metric_name == "seq_final_reward":
                             # Turn to numpy for easier filtering
                             new_batch.non_tensor_batch["seq_final_reward"] = (
@@ -230,11 +315,13 @@ class RayDAPOTrainer(RayPPOTrainer):
                         for prompt_uid, metric_vals in prompt_uid2metric_vals.items():
                             prompt_uid2metric_std[prompt_uid] = np.std(metric_vals)
 
-                        kept_prompt_uids = [
-                            uid
-                            for uid, std in prompt_uid2metric_std.items()
-                            if std > 0 or len(prompt_uid2metric_vals[uid]) == 1
-                        ]
+                        # kept_prompt_uids = [
+                        #     uid
+                        #     for uid, std in prompt_uid2metric_std.items()
+                        #     if std > 0 or len(prompt_uid2metric_vals[uid]) == 1
+                        # ]
+                        kept_prompt_uids = filter_batch_on_win_rate(prompt_uid2metric_vals, prompt_uid2metric_std, win_num_range)
+
                         num_prompt_in_batch += len(kept_prompt_uids)
 
                         kept_traj_idxs = []
@@ -316,6 +403,11 @@ class RayDAPOTrainer(RayPPOTrainer):
                             num_repeat=self.config.actor_rollout_ref.rollout.n,
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                         )
+                    # add data solving metrics
+                    metrics = collect_prompt_solve_metrics(batch, rollout_num, metrics)
+                    # pos_neg_counting metrics
+                    metrics = pos_neg_counting_metrics(batch, response_masks, metrics)
+
 
                     # update critic
                     if self.use_critic:
@@ -331,6 +423,46 @@ class RayDAPOTrainer(RayPPOTrainer):
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
+                    
+                    
+                    # Log rollout generations if enabled
+                    rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
+                    print('check rollout_data_dir: ', rollout_data_dir)
+                    if rollout_data_dir:
+                        print('hi rollout_data_dir!')
+                                
+                        try:
+                            reward_extra_infos_dict['data_source'].extend(batch.non_tensor_batch["data_source"])
+                        except:
+                            print('no data_source')
+                        try:
+                            reward_extra_infos_dict['ability'].extend(batch.non_tensor_batch["ability"])
+                        except:
+                            print('no ability')
+                        try:
+                            reward_extra_infos_dict['reward_model'].extend(batch.non_tensor_batch["reward_model"])
+                        except:
+                            print('no reward_model')
+                        
+                        try:
+                            reward_extra_infos_dict['extra_info'].extend(batch.non_tensor_batch["extra_info"])
+                        except:
+                            print('no extra_info')
+                        
+                        with marked_timer("dump_rollout_generations", timing_raw, color="green"):
+                            print(batch.batch.keys())
+                            inputs = self.tokenizer.batch_decode(batch.batch["prompts"], skip_special_tokens=True)
+                            outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
+                            scores = batch.batch["token_level_scores"].sum(-1).cpu().tolist()
+                            self._dump_generations(
+                                inputs=inputs,
+                                outputs=outputs,
+                                scores=scores,
+                                gts=None,
+                                reward_extra_infos_dict=reward_extra_infos_dict,
+                                dump_path=rollout_data_dir,
+                            )  
+
 
                 # validate
                 if (
