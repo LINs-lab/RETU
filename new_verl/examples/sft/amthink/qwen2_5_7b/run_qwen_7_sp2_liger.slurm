@@ -35,7 +35,7 @@ TEST_FILE=$SAVE_DIR/am_40m_math_intersect_val_199_sft_format.parquet
 
 wandb_project_name=am-long-cot-sft
 wandb_experiment_name=sft-qwen-2.5-7b-sp2-liger
-output_dir=${SAVE_DIR}/outputs/$wandb_experiment_name
+output_dir=${SAVE_DIR}/$wandb_experiment_name
 mkdir -p $output_dir
 
 cnt_from=0 # The start step for the continue training 
