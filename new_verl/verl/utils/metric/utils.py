@@ -16,8 +16,20 @@ Metrics utils.
 """
 
 from typing import Any
-
+import torch
 import numpy as np
+
+def check_scaler(key, val):
+    if isinstance(val, (list, tuple)):
+        # check wheter all elements are scaler
+        if all(np.isscalar(v) or (hasattr(v, 'numel') and 0 < v.numel() <= 1) for v in val):
+            return True
+        else:
+            return False
+    elif np.isscalar(val) or (hasattr(val, 'numel') and 0 < val.numel() <= 1):
+        return True
+    else:
+        return False
 
 
 def reduce_metrics(metrics: dict[str, list[Any]]) -> dict[str, Any]:
@@ -45,10 +57,15 @@ def reduce_metrics(metrics: dict[str, list[Any]]) -> dict[str, Any]:
         {"loss": 2.0, "accuracy": 0.8, "max_reward": 8.0, "min_error": 0.05}
     """
     for key, val in metrics.items():
-        if "max" in key:
-            metrics[key] = np.max(val)
-        elif "min" in key:
-            metrics[key] = np.min(val)
+        if not check_scaler(key, val):
+            # print(f'process metric {key}')
+            # print('check val: ', val)
+            metrics[key] = torch.concat(val)
         else:
-            metrics[key] = np.mean(val)
+            if "max" in key:
+                metrics[key] = np.max(val)
+            elif "min" in key:
+                metrics[key] = np.min(val)
+            else:
+                metrics[key] = np.mean(val)
     return metrics
