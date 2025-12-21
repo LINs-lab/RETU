@@ -216,9 +216,37 @@ class _TensorboardAdapter:
         print(f"Saving tensorboard log to {tensorboard_dir}.")
         self.writer = SummaryWriter(tensorboard_dir)
 
+    def safe_tensor_for_histogram(self, tensor):
+        import torch
+        """
+        safe_tensor_for_histogram, keep original dtype and device
+        """
+        if tensor.numel() == 0:
+            # 保持原始的dtype和device
+            if len(tensor.shape) <= 1:
+                print('Trigger safer tensor - case 1')
+                safe_tensor = torch.zeros(1, dtype=tensor.dtype, device=tensor.device)
+            else:
+                print('Trigger safer tensor - case 2')
+                safe_tensor = torch.zeros(1, tensor.shape[-1], dtype=tensor.dtype, device=tensor.device)
+            return safe_tensor
+        elif tensor.numel() == 1: 
+            print('Trigger safer tensor - case 3')
+            return tensor.repeat(2)
+        else:
+            return tensor
+    
     def log(self, data, step):
+        # for key in data:
+        #     self.writer.add_scalar(key, data[key], step)
         for key in data:
-            self.writer.add_scalar(key, data[key], step)
+            if key in ['actor/adv_in_pos', 'actor/adv_in_neg', 'actor/ratio_in_pos', 'actor/ratio_in_neg', "actor/old_prob_in_pos", "actor/old_prob_in_neg", "actor/cur_prob_in_pos", "actor/cur_prob_in_neg"]:
+                # print(f'{key}: ', data[key])
+                # print(f'{key} length: ', len(data[key]))
+                histogram_tensor = self.safe_tensor_for_histogram(data[key])
+                self.writer.add_histogram(f'{key}_dist', histogram_tensor, step)
+            else:
+                self.writer.add_scalar(key, data[key], step)
 
     def finish(self):
         self.writer.close()
