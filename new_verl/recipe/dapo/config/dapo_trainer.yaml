@@ -23,6 +23,7 @@ algorithm:
     enable: False # We try to avoid forgetting to set enable
     metric: null # acc / score / seq_reward / seq_final_reward / ...
     max_num_gen_batches: 0 # Non-positive values mean no upper limit
+    win_num_range: null # The preserved prompts with concerned difficulties. 
 
 trainer:
   project_name: verl-dapo
