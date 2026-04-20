@@ -259,6 +259,14 @@ def acc_reward(content, sol, reward_func):
     return 0
 
 
+def extract_response_content_from_answer_tag(content):
+    """Last <answer>...</answer> span, or full content — matches reward_rule.py for id_re_eval3."""
+    content_matches = re.findall(r'<answer>(.*?)</answer>', content, re.DOTALL)
+    if content_matches:
+        return content_matches[-1].strip()
+    return content
+
+
 def my_reward_fn(data_source, solution_str, ground_truth, extra_info=None):
     try:
         reward_func = extra_info["reward_func"]

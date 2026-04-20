@@ -6,6 +6,14 @@ from Levenshtein import ratio
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 
+# parse() / verify() use signal.alarm for timeouts (defaults: a few seconds each).
+# signal.alarm only works on the main interpreter thread; with ThreadPoolExecutor
+# (--rule-workers >1) math_verify may return empty/fallback results instead of hanging.
+# For correct rule scores, run id_re_eval3 with --rule-workers 1.
+_MATH_PARSE_KW: dict = {}
+_MATH_VERIFY_KW: dict = {}
+
+
 def process_expression(s):
     # 使用正则表达式移除所有运算符（=+、-、*、/）周围的空格
     return re.sub(r'\s*([=+\-*/])\s*', r'\1', s)
@@ -23,8 +31,8 @@ def basic_verify(content, sol):
         >>> basic_verify(content, sol)
         >>> # Output: 0.0
     '''
-    answer = parse(content)
-    verified_res = float(verify(answer, parse(sol)))
+    answer = parse(content, **_MATH_PARSE_KW)
+    verified_res = float(verify(answer, parse(sol, **_MATH_PARSE_KW), **_MATH_VERIFY_KW))
     # print('check verified res: ', verified_res)
     if verified_res > 0:
         reward = 1.0
@@ -47,6 +55,7 @@ def parse_latex_gt(sol):
         sol,
         extraction_mode="first_match", # 提取模式：只提取第一个匹配的数学表达式
         extraction_config=[LatexExtractionConfig()], # 使用LaTeX提取配置
+        **_MATH_PARSE_KW,
     )
     return gold_parsed
 
@@ -108,9 +117,10 @@ def parse_latex_response(content):
         try_extract_without_anchor=False, # 不尝试在没有锚点的情况下提取
     )
     answer_parsed = parse(
-                content,
-                extraction_mode="first_match",
-                extraction_config = [latex_extraction_config],
+        content,
+        extraction_mode="first_match",
+        extraction_config=[latex_extraction_config],
+        **_MATH_PARSE_KW,
     )
 
     return answer_parsed
@@ -118,15 +128,11 @@ def parse_latex_response(content):
 
 
 def second_verify(content, sol):
+    reward = 0.0
     gold_parsed = parse_latex_gt(sol)
-    # 若成功精炼出 ground truth
     if len(gold_parsed) != 0:
-        # 尝试从 response content 中提取
         answer_parsed = parse_latex_response(content)
-        # Reward 1 if the content is the same as the ground truth, 0 otherwise
-       
-        # 
-        threshold = float(verify(answer_parsed, gold_parsed))
+        threshold = float(verify(answer_parsed, gold_parsed, **_MATH_VERIFY_KW))
         if threshold > 0:
             reward = 1.0
         else:
@@ -175,33 +181,31 @@ def default_accuracy_reward(content, sol):
         content:  模型生成的回答
         sol: 为ground truth
     '''
-    content = extract_response_content_from_answer_tag(content)
-    # 解析不出来response， 直接把reward 设置为 0.0
+    reward = 0.0
     if content is None:
-        reward = 0.0
-    #第一步: 基础验证
+        return reward
+    content = extract_response_content_from_answer_tag(content)
+    if content is None:
+        return reward
+
     try:
         reward = basic_verify(content, sol)
-    except Exception as e:
-        pass # 如果basic_verify报错, 则reward为0.0
+    except Exception:
+        reward = 0.0
 
-    # 若基础验证失败, 执行第二轮验证
     if reward == 0.0:
-        # 精炼
         gold_parsed = parse_latex_gt(sol)
-        # 若成功精炼出 ground truth
         if len(gold_parsed) != 0:
-            # 尝试从 response content 中提取
             try:
                 reward = second_verify(content, sol)
-            except Exception as e:
-                pass # 如果basic_verify报错, 则reward为0.0
+            except Exception:
+                reward = 0.0
 
     if reward == 0.0:
         try:
             reward = extract_ans_verify(content, sol)
-        except Exception as e:
-            pass # 如果basic_verify报错, 则reward为0.0
+        except Exception:
+            reward = 0.0
     return reward
 
 # def calculate_rewards_simple(df):
