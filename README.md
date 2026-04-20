@@ -71,6 +71,10 @@ RL data:
 Benchmark:
 - [benchmark](https://huggingface.co/datasets/Daniel21Ding/benchmark)
 
+## Version
+- SFT
+The SFT experiments are performed on ./new_verl with verl-version 0.5.0.dev
+
 
 ## Scripts
 - SFT
