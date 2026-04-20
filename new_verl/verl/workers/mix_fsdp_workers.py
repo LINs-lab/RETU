@@ -260,7 +260,9 @@ class MIXActorRolloutRefWorker(Worker, DistProfilerExtension):
     ):
         from torch import optim
         from torch.distributed.fsdp import CPUOffload, MixedPrecision
-        from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoModelForVision2Seq
+        from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
+
+        from verl.utils.hf_automodel_compat import AutoModelForVision2Seq
 
         from verl.utils.model import get_generation_config, print_model_size, update_model_config
         from verl.utils.torch_dtypes import PrecisionType

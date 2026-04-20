@@ -55,10 +55,11 @@ from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
     AutoModelForTokenClassification,
-    AutoModelForVision2Seq,
     GenerationConfig,
     PretrainedConfig,
 )
+
+from verl.utils.hf_automodel_compat import AutoModelForVision2Seq
 
 try:
     # for torch 2.5+

@@ -24,11 +24,11 @@ from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
     AutoModelForTokenClassification,
-    AutoModelForVision2Seq,
     GenerationConfig,
 )
 
 from verl.utils import hf_processor, hf_tokenizer
+from verl.utils.hf_automodel_compat import AutoModelForVision2Seq
 
 
 def parse_args():
