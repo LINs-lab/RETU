@@ -126,5 +126,5 @@ print("npu_count:", torch.npu.device_count())
 PY
 ```
 
-**Referenc**:
+**Reference**:
 1. https://verl.readthedocs.io/en/v0.5.x/ascend_tutorial/ascend_quick_start.html
