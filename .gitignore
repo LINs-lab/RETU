@@ -1,3 +1,6 @@
 *pyc
 api_call
 new_verl/tensorboard
+new_verl/recipe/dapo/train_script/uniform1k_62.sh
+new_verl/recipe/dapo/train_script/uniform1k_124.sh
+analysis/flops_estimate_kit/fit_res
