@@ -126,9 +126,3 @@ print("npu_count:", torch.npu.device_count())
 PY
 ```
 
-
-The exemplary RL training script is:
-
-```bash
-bash "/mnt/public/dingbowen/RETU/new_verl/recipe/dapo/train_script/dapo_qwen7b_14080_valtemp0_7_topp1_gpu.sh"
-```
