@@ -2,7 +2,7 @@ cd /RETU/new_verl/recipe/dapo
 
 
 eval "$(conda shell.bash hook)"
-conda activate dbw_dev
+conda activate retu_verl
 echo "python=$(which python)"
 
 ray stop
@@ -29,8 +29,8 @@ state=cnt_from_${cnt_ckpt}step
 ckpt=0
 
 
-SAVE_DIR=/RETU/new_verl/sft_ckpts
-WORK_DIR=/RETU/new_verl
+SAVE_DIR=./new_verl/sft_ckpts
+WORK_DIR=./new_verl
 echo "WORK_DIR=$WORK_DIR"
 cd $WORK_DIR
 export PYTHONPATH="$WORK_DIR/verl:$PYTHONPATH"
@@ -39,8 +39,8 @@ export PYTHONPATH="$WORK_DIR/verl:$PYTHONPATH"
 wandb_experiment_name=sft-qwen-2.5-7b-sp2-liger # Taking SFT889K + Qwen2.5-7B as an example
  
 MODEL_PATH=${SAVE_DIR}/${wandb_experiment_name}/global_step_${ckpt}/huggingface
-TRAIN_FILE=/RETU/data_zoo/rl_data/RL62K.parquet
-TEST_FILE=/RETU/data_zoo/benchmark/benchmark_data_expanded.parquet
+TRAIN_FILE=./data_zoo/RL62K.parquet
+TEST_FILE=./data_zoo/benchmark.parquet
 output_dir=${SAVE_DIR}/$wandb_experiment_name
 mkdir -p $output_dir
 tensorboard_save_dir=${WORK_DIR}/tensorboard/${wandb_experiment_name}

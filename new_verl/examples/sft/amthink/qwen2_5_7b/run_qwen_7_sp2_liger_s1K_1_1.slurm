@@ -15,7 +15,7 @@
 cd /RETU/new_verl/examples/sft/amthink
 
 eval "$(conda shell.bash hook)"
-conda activate dbw_dev
+conda activate retu_verl
 echo "python=$(which python)"
 
 export VLLM_ATTENTION_BACKEND=XFORMERS
