@@ -71,7 +71,7 @@ For the **Paradigms Comparison** experiments, we utilized the [Unify-Post-Traini
 ## 3. NPU Environment for RL
 For the RL-phase experiments in Section 6.2 of the paper, we use Ascend 910B NPUs (A2-class hardware) for training, with the code in `./new_verl`. The key
 point is to keep **CANN**, **torch**, **torch_npu**, **vLLM**, and
-**vLLM-Ascend** mutually compatible.
+**vLLM-Ascend** mutually compatible. 
 
 We recommend starting from the provided Dockerfile, which uses the 910B image
 `swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:8.2.rc1-910b-ubuntu22.04-py3.11`,
@@ -126,3 +126,5 @@ print("npu_count:", torch.npu.device_count())
 PY
 ```
 
+**Referenc**:
+1. https://verl.readthedocs.io/en/v0.5.x/ascend_tutorial/ascend_quick_start.html
