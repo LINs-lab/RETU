@@ -8,6 +8,10 @@ OUTPUT_ROOT="${FIT_OUTPUT_ROOT:-${KIT_ROOT}/fit_result}"
 cd "${KIT_ROOT}"
 
 output_scene="s1K"
+title_dataset="${output_scene}"
+if [[ "${title_dataset}" == "general" ]]; then
+  title_dataset="SFT889K"
+fi
 sft_scene="s1K"
 rl_start_point=62
 max_step="auto"
@@ -24,10 +28,11 @@ figure_save_path="${out_dir}/qwen_2_5_7b_sft_s1K_dapo_62_max_step_auto_ts12_fp75
 metrics_json_out="${out_dir}/metrics.json"
 log_path="${out_dir}/run.log"
 
-echo "[fit] output_scene=${output_scene} sft_scene=${sft_scene} ckpt=${rl_start_point}"
-echo "[fit] figure=${figure_save_path}"
+{
+  echo "[fit] output_scene=${output_scene} sft_scene=${sft_scene} ckpt=${rl_start_point}"
+  echo "[fit] figure=${figure_save_path}"
 
-python3 fitting_curves.py \
+  python3 fitting_curves.py \
   --sft_parquets_dir "" \
   --rl_parquets_dir "" \
   --rl_progress_dir "" \
@@ -37,6 +42,7 @@ python3 fitting_curves.py \
   --metrics_json_out "${metrics_json_out}" \
   --model_name "${model_name}" \
   --sft_scene "${sft_scene}" \
+  --title_dataset "${title_dataset}" \
   --rl_method "${rl_method}" \
   --max_step "${max_step}" \
   --sft_steps "${sft_steps[@]}" \
@@ -49,5 +55,5 @@ python3 fitting_curves.py \
   --train_split 12 87 \
   --val_split 87 100 \
   --free_c0 \
-  --gap_weight 0.2 \
-  2>&1 | tee "${log_path}"
+  --gap_weight 0.2
+} 2>&1 | tee "${log_path}"

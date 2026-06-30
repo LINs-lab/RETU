@@ -1,0 +1,54 @@
+[fit] output_scene=easy102K sft_scene=easy102K ckpt=1800
+[fit] figure=/mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/easy102K/ckpt1800/qwen_2_5_7b_sft_easy102K_dapo_1800_max_step_auto_fit15_hparam_best.png
+Selected hyperparameters
+  fit_points_num=15
+  train_split=None
+  val_split=None
+  use_robust_reg=False
+  lts_alpha=0.75
+  outlier_threshold=2.5
+  val_most=100
+  free_c0=False
+SFT step=360 segment_steps=360 cumulative_eflops=19.76
+SFT step=720 segment_steps=360 cumulative_eflops=39.52
+SFT step=1080 segment_steps=360 cumulative_eflops=59.28
+SFT step=1440 segment_steps=360 cumulative_eflops=79.04
+SFT step=1800 segment_steps=360 cumulative_eflops=98.8
+SFT step=6120 segment_steps=4320 cumulative_eflops=335.95
+Loading easy102K_flops2valPerform_sft_dict.pkl from /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/cache/sft/easy102K_flops2valPerform_sft_dict.pkl
+Loading easy102K_step2flops2valPerform_dapo_ckpt1800.pkl from /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/cache/sft_then_rl/easy102K/easy102K_step2flops2valPerform_dapo_ckpt1800.pkl
+step2flops_per_ckpt: {0: 0, 360: 19.76, 720: 39.52, 1080: 59.28, 1440: 79.04, 1800: 98.8, 6120: 335.95}
+branch_flops: {1800: 98.8}
+Config set for benchmark 'overall': {'split_mode': 'index', 'train_range': (0, 15), 'val_range': (15, 100), 'detect_outliers': True, 'outlier_threshold': 2.5, 'use_robust_regression': False, 'lts_alpha': 0.75, 'model_types': ['logistic'], 'metric': 'auto', 'fixed_C0': 0, 'exclude_nonpositive_val': False}
+
+Analyzing SFT Checkpoint 1800
+Default config: {'split_mode': 'index', 'train_range': (0, 60), 'val_range': (60, 100), 'detect_outliers': True, 'outlier_threshold': 2.5, 'use_robust_regression': False, 'lts_alpha': 0.75, 'model_types': 'auto', 'metric': 'val_rmse', 'fixed_C0': 0, 'exclude_nonpositive_val': False}
+Benchmark-specific config applied to 1 benchmarks
+use fit_logistic_grid_search: False
+use fit_logistic_grid_search: False
+Figure saved to: /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/easy102K/ckpt1800/qwen_2_5_7b_sft_easy102K_dapo_1800_max_step_auto_fit15_hparam_best.png
+
+==================================================================================================================================
+SFT Checkpoint 1800 - Summary of Best Models
+Selected 1 benchmarks
+==================================================================================================================================
+use fit_logistic_grid_search: False
+use fit_logistic_grid_search: False
+Benchmark | Model    | Train R² | Val R² | Val RMSE | AIC   | BIC   | Mode | Config    
+---------------------------------------------------------------------------------------
+overall   | logistic | 0.6938   | 0.0349 | 0.3306   | -32.5 | -30.4 | inde | TR:(0, 15)
+use fit_logistic_grid_search: False
+use fit_logistic_grid_search: False
+
+====================================================================================================
+Predictions for Future FLOPs
+====================================================================================================
+
+overall (Model: logistic)
+Config: TR:(0, 15), RR:False
+Equation: y = 0.00 + 3.37/(1+(43/x)^0.28) [C0 fixed]
+  FLOPs=30000: 2.9098
+  FLOPs=40000: 2.9412
+  FLOPs=50000: 2.9643
+  FLOPs=60000: 2.9823
+Wrote metrics to /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/easy102K/ckpt1800/metrics.json

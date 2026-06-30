@@ -16,7 +16,7 @@ Given an SFT checkpoint and its downstream RL run, the fitting pipeline:
 2. Loads the cached SFT performance curve from `cache/sft/`.
 3. Loads the cached RL branch curve from `cache/sft_then_rl/`.
 4. Aligns the SFT branch point with historical cache keys.
-5. Converts the branch into relative RL EFLOPs versus performance gain.
+5. Converts the branch into Accum RL ExaFLOPs versus performance gain.
 6. Fits the selected scaling curve with fixed, released hyperparameters.
 7. Saves the figure, fit metrics, and run log under `fit_result/`.
 
@@ -103,8 +103,8 @@ fit_result/run_all.log
 
 ## How To Read The Figures
 
-- The x-axis is relative RL compute after the selected SFT checkpoint, measured
-  in EFLOPs.
+- The x-axis is accumulated RL compute after the selected SFT checkpoint,
+  labeled as `Accum RL ExaFLOPs`.
 - The y-axis is validation performance gain over the SFT checkpoint performance.
 - `Psft` in a panel title is the validation performance at the SFT branch point.
 - Individual benchmark panels show per-task scaling behavior.

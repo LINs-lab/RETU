@@ -1,0 +1,66 @@
+{
+  "metrics": {
+    "score": -0.14437701712507783,
+    "mean_r2_val": 0.06716590739995176,
+    "mean_r2_train": 0.8487682083903507,
+    "mean_overfit_gap": 0.781602300990399,
+    "per_benchmark": {
+      "overall": {
+        "r2_val": 0.06716590739995176,
+        "r2_train": 0.8487682083903507,
+        "rmse_val": 0.3565690692226655,
+        "equation": "y = 0.00 + 2.04/(1+(41/x)^1.98) [C0 fixed]"
+      }
+    }
+  },
+  "predictions": {
+    "overall": {
+      "model": "logistic",
+      "equation": "y = 0.00 + 2.04/(1+(41/x)^1.98) [C0 fixed]",
+      "predictions": {
+        "30000": 2.040970597920806,
+        "40000": 2.0409724867481116,
+        "50000": 2.0409733655791253,
+        "60000": 2.0409738449348804
+      },
+      "config": {
+        "split_mode": "index",
+        "train_range": [
+          0,
+          37
+        ],
+        "val_range": [
+          37,
+          100
+        ],
+        "detect_outliers": true,
+        "outlier_threshold": 2.5,
+        "use_robust_regression": true,
+        "lts_alpha": 0.75,
+        "model_types": [
+          "logistic"
+        ],
+        "metric": "auto",
+        "fixed_C0": 0,
+        "exclude_nonpositive_val": false
+      }
+    }
+  },
+  "hparams": {
+    "fit_points_num": 37,
+    "use_robust_reg": true,
+    "lts_alpha": 0.75,
+    "outlier_threshold": 2.5,
+    "val_most": 100,
+    "gap_weight": 0.2,
+    "train_range": [
+      0,
+      37
+    ],
+    "val_range": [
+      37,
+      100
+    ],
+    "free_c0": false
+  }
+}

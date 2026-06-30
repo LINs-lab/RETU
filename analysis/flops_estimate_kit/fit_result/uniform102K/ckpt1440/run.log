@@ -1,0 +1,53 @@
+[fit] output_scene=uniform102K sft_scene=uniform102K ckpt=1440
+[fit] figure=/mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/uniform102K/ckpt1440/qwen_2_5_7b_sft_uniform102K_dapo_1440_max_step_auto_fit53_fp53_rob0_lts0.75_ot2.5_vm100.png
+Selected hyperparameters
+  fit_points_num=53
+  train_split=None
+  val_split=None
+  use_robust_reg=False
+  lts_alpha=0.75
+  outlier_threshold=2.5
+  val_most=100
+  free_c0=False
+SFT step=360 segment_steps=360 cumulative_eflops=34.67
+SFT step=720 segment_steps=360 cumulative_eflops=69.34
+SFT step=1080 segment_steps=360 cumulative_eflops=104.01
+SFT step=1440 segment_steps=360 cumulative_eflops=138.68
+SFT step=1800 segment_steps=360 cumulative_eflops=173.35
+Loading uniform102K_flops2valPerform_sft_dict.pkl from /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/cache/sft/uniform102K_flops2valPerform_sft_dict.pkl
+Loading uniform102K_step2flops2valPerform_dapo_ckpt1440.pkl from /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/cache/sft_then_rl/uniform102K/uniform102K_step2flops2valPerform_dapo_ckpt1440.pkl
+step2flops_per_ckpt: {0: 0, 360: 34.67, 720: 69.34, 1080: 104.01, 1440: 138.68, 1800: 173.35}
+branch_flops: {1440: 138.68}
+Config set for benchmark 'overall': {'split_mode': 'index', 'train_range': (0, 53), 'val_range': (53, 100), 'detect_outliers': True, 'outlier_threshold': 2.5, 'use_robust_regression': False, 'lts_alpha': 0.75, 'model_types': ['logistic'], 'metric': 'auto', 'fixed_C0': 0, 'exclude_nonpositive_val': False}
+
+Analyzing SFT Checkpoint 1440
+Default config: {'split_mode': 'index', 'train_range': (0, 60), 'val_range': (60, 100), 'detect_outliers': True, 'outlier_threshold': 2.5, 'use_robust_regression': False, 'lts_alpha': 0.75, 'model_types': 'auto', 'metric': 'val_rmse', 'fixed_C0': 0, 'exclude_nonpositive_val': False}
+Benchmark-specific config applied to 1 benchmarks
+use fit_logistic_grid_search: False
+use fit_logistic_grid_search: False
+Figure saved to: /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/uniform102K/ckpt1440/qwen_2_5_7b_sft_uniform102K_dapo_1440_max_step_auto_fit53_fp53_rob0_lts0.75_ot2.5_vm100.png
+
+==================================================================================================================================
+SFT Checkpoint 1440 - Summary of Best Models
+Selected 1 benchmarks
+==================================================================================================================================
+use fit_logistic_grid_search: False
+use fit_logistic_grid_search: False
+Benchmark | Model    | Train R² | Val R²  | Val RMSE | AIC    | BIC    | Mode | Config    
+------------------------------------------------------------------------------------------
+overall   | logistic | 0.7577   | -0.2837 | 4.2425   | -115.6 | -109.7 | inde | TR:(0, 53)
+use fit_logistic_grid_search: False
+use fit_logistic_grid_search: False
+
+====================================================================================================
+Predictions for Future FLOPs
+====================================================================================================
+
+overall (Model: logistic)
+Config: TR:(0, 53), RR:False
+Equation: y = 0.00 + 1.78/(1+(46/x)^2.20) [C0 fixed]
+  FLOPs=30000: 1.7826
+  FLOPs=40000: 1.7826
+  FLOPs=50000: 1.7826
+  FLOPs=60000: 1.7826
+Wrote metrics to /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/uniform102K/ckpt1440/metrics.json

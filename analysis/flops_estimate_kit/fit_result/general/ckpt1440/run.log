@@ -1,0 +1,54 @@
+[fit] output_scene=general sft_scene=general ckpt=1440
+[fit] figure=/mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/general/ckpt1440/qwen_2_5_7b_sft_general_dapo_1440_max_step_auto_fit16_hparam_best.png
+Selected hyperparameters
+  fit_points_num=16
+  train_split=None
+  val_split=None
+  use_robust_reg=True
+  lts_alpha=0.85
+  outlier_threshold=4.0
+  val_most=100
+  free_c0=False
+SFT step=360 segment_steps=360 cumulative_eflops=34.92
+SFT step=720 segment_steps=360 cumulative_eflops=69.84
+SFT step=1080 segment_steps=360 cumulative_eflops=104.76
+SFT step=1440 segment_steps=360 cumulative_eflops=139.68
+SFT step=1800 segment_steps=360 cumulative_eflops=174.6
+SFT step=3600 segment_steps=1800 cumulative_eflops=349.18
+SFT step=5400 segment_steps=1800 cumulative_eflops=523.76
+SFT step=7200 segment_steps=1800 cumulative_eflops=698.34
+SFT step=9000 segment_steps=1800 cumulative_eflops=872.92
+SFT step=10800 segment_steps=1800 cumulative_eflops=1047.5
+SFT step=12600 segment_steps=1800 cumulative_eflops=1222.08
+SFT step=14080 segment_steps=1480 cumulative_eflops=1365.62
+Loading general_flops2valPerform_sft_dict.pkl from /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/cache/sft/general_flops2valPerform_sft_dict.pkl
+Loading general_step2flops2valPerform_dapo_ckpt1440.pkl from /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/cache/sft_then_rl/general/general_step2flops2valPerform_dapo_ckpt1440.pkl
+step2flops_per_ckpt: {0: 0, 360: 34.92, 720: 69.84, 1080: 104.76, 1440: 139.68, 1800: 174.6, 3600: 349.18, 5400: 523.76, 7200: 698.34, 9000: 872.92, 10800: 1047.5, 12600: 1222.08, 14080: 1365.62}
+branch_flops: {1440: 139.68}
+Config set for benchmark 'overall': {'split_mode': 'index', 'train_range': (0, 16), 'val_range': (16, 100), 'detect_outliers': True, 'outlier_threshold': 4.0, 'use_robust_regression': True, 'lts_alpha': 0.85, 'model_types': ['logistic'], 'metric': 'auto', 'fixed_C0': 0, 'exclude_nonpositive_val': False}
+
+Analyzing SFT Checkpoint 1440
+Default config: {'split_mode': 'index', 'train_range': (0, 60), 'val_range': (60, 100), 'detect_outliers': True, 'outlier_threshold': 2.5, 'use_robust_regression': False, 'lts_alpha': 0.75, 'model_types': 'auto', 'metric': 'val_rmse', 'fixed_C0': 0, 'exclude_nonpositive_val': False}
+Benchmark-specific config applied to 1 benchmarks
+Figure saved to: /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/general/ckpt1440/qwen_2_5_7b_sft_general_dapo_1440_max_step_auto_fit16_hparam_best.png
+
+==================================================================================================================================
+SFT Checkpoint 1440 - Summary of Best Models
+Selected 1 benchmarks
+==================================================================================================================================
+Benchmark | Model    | Train R² | Val R² | Val RMSE | AIC   | BIC   | Mode | Config    
+---------------------------------------------------------------------------------------
+overall   | logistic | 0.9863   | 0.0079 | 0.4355   | -30.3 | -28.6 | inde | TR:(0, 16)
+
+====================================================================================================
+Predictions for Future FLOPs
+====================================================================================================
+
+overall (Model: logistic)
+Config: TR:(0, 16), RR:True
+Equation: y = 0.00 + 6.99/(1+(9/x)^1.71) [C0 fixed]
+  FLOPs=30000: 6.9875
+  FLOPs=40000: 6.9875
+  FLOPs=50000: 6.9875
+  FLOPs=60000: 6.9875
+Wrote metrics to /mnt/public/dingbowen/RETU/analysis/flops_estimate_kit/fit_result/general/ckpt1440/metrics.json

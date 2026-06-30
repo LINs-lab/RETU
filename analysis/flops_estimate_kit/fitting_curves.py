@@ -24,6 +24,7 @@ def parse_args():
 
     parser.add_argument("--model_name", type=str, default="qwen_2_5_7b")
     parser.add_argument("--sft_scene", type=str, required=True)
+    parser.add_argument("--title_dataset", type=str, default="")
     parser.add_argument("--rl_method", type=str, default="dapo")
     parser.add_argument("--max_step", type=str, default="auto")
     parser.add_argument("--sft_steps", type=int, nargs="+", required=True)
@@ -40,6 +41,10 @@ def parse_args():
     parser.add_argument("--free_c0", action="store_true")
     parser.add_argument("--exclude_nonpositive_val", action="store_true")
     return parser.parse_args()
+
+
+def title_dataset_for_scene(scene):
+    return "SFT889K" if scene == "general" else scene
 
 
 def main():
@@ -90,17 +95,20 @@ def main():
         "exclude_nonpositive_val": args.exclude_nonpositive_val,
     }
 
+    title_dataset = args.title_dataset or title_dataset_for_scene(args.sft_scene)
+
     results, predictions, _ = plot_advanced_scaling_v2(
         data_pack["test_ckpt"],
         data_pack["combined_flops2val_performance"],
         data_pack["branch_flops"],
         default_config=default_config,
         benchmark_configs=benchmark_configs,
-        benchmark_filter=None,
+        benchmark_filter=["overall"],
         predict_flops_list=[30000, 40000, 50000, 60000],
         save_path=args.figure_save_path,
         dpi=300,
         save_format="png",
+        title_dataset=title_dataset,
     )
 
     if args.metrics_json_out:
@@ -129,4 +137,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
